@@ -2,6 +2,14 @@
 
 Python/FastAPI cloud broker on AWS Fargate. Mediates between edge agents (Rust/Tauri) and the web portal (React).
 
+## Context Loading
+
+Before running `/design`, `/plan`, or `/build` in this repo, load workspace context:
+1. Read `../CLAUDE.md` for workspace structure and shorthand reference
+2. Read `../.claude/topic-index.md` for cross-repo doc discovery
+3. Read the relevant epic's `*-rules.md` for business rules and its `## References` table
+4. Follow `## References` paths to load upstream docs (PRDs, ADRs, schemas)
+
 ## Stack
 
 - **Language:** Python 3.11+
