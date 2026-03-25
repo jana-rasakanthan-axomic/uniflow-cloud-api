@@ -1,134 +1,143 @@
 """Tests for POST /edge/upload/sts endpoint."""
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
+from app.api.dependencies import get_agent_id_from_jwt
+from app.api.routers.edge import router as edge_router
+from app.database import get_db
 from app.schemas.upload import STSCredentials, UploadTarget
 
 
 @pytest.fixture
 def agent_id():
-    """Generate a test agent UUID."""
     return uuid4()
 
 
 @pytest.fixture
 def job_id():
-    """Generate a test job UUID."""
     return uuid4()
 
 
 @pytest.fixture
 def file_ids():
-    """Generate test file UUIDs."""
     return [uuid4(), uuid4(), uuid4()]
 
 
 @pytest.fixture
 def mock_db():
-    """Mock database session."""
     return AsyncMock()
 
 
 @pytest.fixture
-def mock_sts_service():
-    """Mock STS service."""
-    service = AsyncMock()
+def app(agent_id):
+    """Create FastAPI app with overridden dependencies."""
+    test_app = FastAPI()
+    test_app.include_router(edge_router, prefix="/edge")
 
-    # Default mock credentials
-    expiry = datetime.now(UTC) + timedelta(hours=12)
-    service.issue_sts_credentials = AsyncMock(return_value={
-        "credentials": STSCredentials(
-            access_key="ASIAXXX",
-            secret_key="secret123",
-            session_token="token123",
-            expiry=expiry
-        ),
-        "upload_targets": [
-            UploadTarget(
-                file_id=uuid4(),
-                bucket="dam-bucket",
-                key="uploads/org123/job123/agent123/file123.jpg",
-                oa_asset_id="oa_asset_123"
-            )
-        ]
-    })
+    async def override_agent_id():
+        return agent_id
 
-    return service
+    async def override_db():
+        return AsyncMock()
+
+    test_app.dependency_overrides[get_agent_id_from_jwt] = override_agent_id
+    test_app.dependency_overrides[get_db] = override_db
+    return test_app
 
 
-@pytest.mark.asyncio
-async def test_issue_sts_credentials_success(
-    mock_db,
-    agent_id,
-    job_id,
-    file_ids,
-    mock_sts_service
-):
-    """Test successful STS credential issuance."""
-    # This test will fail until we implement the endpoint
-    # Import will fail until route exists
-    with pytest.raises(ImportError):
-        pass
+@pytest.fixture
+def client(app):
+    return TestClient(app)
 
 
-@pytest.mark.asyncio
-async def test_issue_sts_credentials_unauthorized_agent(
-    mock_db,
-    agent_id,
-    job_id,
-    file_ids
-):
-    """Test STS credential issuance fails when agent doesn't own files."""
-    # This test will fail until we implement the endpoint
-    with pytest.raises(ImportError):
-        pass
+class TestUploadSTS:
+    """Test POST /edge/upload/sts endpoint."""
 
+    @patch("app.api.routers.edge.STSService")
+    @patch("app.api.routers.edge.FileRepository")
+    def test_issue_sts_credentials_success(
+        self, mock_repo_cls, mock_sts_cls, client, job_id, file_ids
+    ):
+        """Test successful STS credential issuance."""
+        mock_repo = mock_repo_cls.return_value
+        mock_repo.verify_agent_ownership = AsyncMock(return_value=True)
 
-@pytest.mark.asyncio
-async def test_issue_sts_credentials_invalid_job(
-    mock_db,
-    agent_id,
-    file_ids
-):
-    """Test STS credential issuance fails for invalid job."""
-    # This test will fail until we implement the endpoint
-    with pytest.raises(ImportError):
-        pass
+        expiry = datetime.now(UTC) + timedelta(hours=12)
+        mock_sts = mock_sts_cls.return_value
+        mock_sts.issue_sts_credentials = AsyncMock(return_value={
+            "credentials": STSCredentials(
+                access_key="ASIAXXX",
+                secret_key="secret123",
+                session_token="token123",
+                expiry=expiry,
+            ),
+            "upload_targets": [
+                UploadTarget(
+                    file_id=file_ids[0],
+                    bucket="dam-bucket",
+                    key=f"uploads/org/job/{file_ids[0]}.jpg",
+                    oa_asset_id="oa_123",
+                )
+            ],
+        })
 
+        response = client.post("/edge/upload/sts", json={
+            "job_id": str(job_id),
+            "file_ids": [str(fid) for fid in file_ids],
+        })
 
-@pytest.mark.asyncio
-async def test_verify_agent_ownership_true(mock_db, agent_id, file_ids):
-    """Test that verify_agent_ownership returns True when agent owns all files."""
-    from app.repositories.file_repository import FileRepository
+        assert response.status_code == 200
+        data = response.json()
+        assert data["credentials"]["access_key"] == "ASIAXXX"
+        assert len(data["upload_targets"]) == 1
 
-    repo = FileRepository()
+    @patch("app.api.routers.edge.FileRepository")
+    def test_issue_sts_credentials_unauthorized_agent(
+        self, mock_repo_cls, client, job_id, file_ids
+    ):
+        """Test STS credential issuance fails when agent doesn't own files."""
+        mock_repo = mock_repo_cls.return_value
+        mock_repo.verify_agent_ownership = AsyncMock(return_value=False)
 
-    # Mock the database query to return matching records
-    mock_result = MagicMock()
-    mock_result.scalar_one_or_none.return_value = len(file_ids)
-    mock_db.execute = AsyncMock(return_value=mock_result)
+        response = client.post("/edge/upload/sts", json={
+            "job_id": str(job_id),
+            "file_ids": [str(fid) for fid in file_ids],
+        })
 
-    result = await repo.verify_agent_ownership(mock_db, agent_id, file_ids)
+        assert response.status_code == 403
+        assert "does not own" in response.json()["detail"]
 
-    assert result is True
+class TestVerifyAgentOwnership:
+    """Test FileRepository.verify_agent_ownership."""
 
+    @pytest.mark.asyncio
+    async def test_verify_agent_ownership_true(self, mock_db, agent_id, file_ids):
+        """Test returns True when agent owns all files."""
+        from app.repositories.file_repository import FileRepository
 
-@pytest.mark.asyncio
-async def test_verify_agent_ownership_false(mock_db, agent_id, file_ids):
-    """Test that verify_agent_ownership returns False when agent doesn't own all files."""
-    from app.repositories.file_repository import FileRepository
+        repo = FileRepository()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = len(file_ids)
+        mock_db.execute = AsyncMock(return_value=mock_result)
 
-    repo = FileRepository()
+        result = await repo.verify_agent_ownership(mock_db, agent_id, file_ids)
+        assert result is True
 
-    # Mock the database query to return fewer records than requested
-    mock_result = MagicMock()
-    mock_result.scalar_one_or_none.return_value = len(file_ids) - 1
-    mock_db.execute = AsyncMock(return_value=mock_result)
+    @pytest.mark.asyncio
+    async def test_verify_agent_ownership_false(self, mock_db, agent_id, file_ids):
+        """Test returns False when agent doesn't own all files."""
+        from app.repositories.file_repository import FileRepository
 
-    result = await repo.verify_agent_ownership(mock_db, agent_id, file_ids)
+        repo = FileRepository()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = len(file_ids) - 1
+        mock_db.execute = AsyncMock(return_value=mock_result)
 
-    assert result is False
+        result = await repo.verify_agent_ownership(mock_db, agent_id, file_ids)
+        assert result is False
