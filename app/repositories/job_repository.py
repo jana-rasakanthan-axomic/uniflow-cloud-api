@@ -1,13 +1,14 @@
 """Job repository for database operations."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import and_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import lazyload
 
 from app.models.job import Job
+from app.shared.enums.job_status import JobStatus
 
 
 class JobRepository:
@@ -50,9 +51,14 @@ class JobRepository:
 
         db.add(job)
         await db.flush()
-        # Expire to prevent eager loading of relationships in tests
-        db.expire(job)
-        return job
+
+        # Re-fetch with lazyload to avoid eager relationship loading
+        result = await db.execute(
+            select(Job)
+            .where(Job.id == job_id)
+            .options(lazyload("*"))
+        )
+        return result.scalar_one()
 
     async def update_state(
         self,
@@ -105,3 +111,25 @@ class JobRepository:
             .options(lazyload("*"))
         )
         return result.scalar_one_or_none()
+
+    async def find_expired_jobs(self, db: AsyncSession) -> list[Job]:
+        """Find jobs that have expired and are in WAITING_FOR_AGENT state.
+
+        Args:
+            db: Database session
+
+        Returns:
+            List of expired Job instances
+        """
+        now = datetime.now(UTC)
+        result = await db.execute(
+            select(Job)
+            .where(
+                and_(
+                    Job.status == JobStatus.WAITING_FOR_AGENT,
+                    Job.expires_at < now
+                )
+            )
+            .options(lazyload("*"))
+        )
+        return list(result.scalars().all())

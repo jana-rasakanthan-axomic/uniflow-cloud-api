@@ -1,110 +1,155 @@
-"""Tests for job schemas."""
+"""Tests for job schemas (Pydantic models)."""
 
+from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
 from pydantic import ValidationError
 
-from app.schemas.job_schemas import CreateJobRequest, JobResponse
+from app.schemas.job_schemas import (
+    ConflictErrorResponse,
+    JobStateTransitionRequest,
+    JobStateTransitionResponse,
+)
+from app.shared.enums.job_status import JobStatus
 
 
-class TestCreateJobRequest:
-    """Test CreateJobRequest validation."""
+class TestJobStateTransitionRequest:
+    """Test JobStateTransitionRequest schema."""
 
-    def test_valid_request(self):
-        """Test valid job creation request."""
-        collection_id = uuid4()
-        file_ids = [uuid4(), uuid4(), uuid4()]
+    def test_valid_action(self):
+        """Valid action creates schema successfully."""
+        request = JobStateTransitionRequest(action="consent")
+        assert request.action == "consent"
 
-        request = CreateJobRequest(
-            collection_id=collection_id,
-            file_ids=file_ids
-        )
+    def test_all_valid_actions(self):
+        """All valid action strings are accepted."""
+        valid_actions = [
+            "complete_registration",
+            "fail",
+            "consent",
+            "deny",
+            "cancel",
+            "timeout",
+            "pause",
+            "complete",
+            "partial_fail",
+            "resume",
+        ]
+        for action in valid_actions:
+            request = JobStateTransitionRequest(action=action)
+            assert request.action == action
 
-        assert request.collection_id == collection_id
-        assert request.file_ids == file_ids
-        assert len(request.file_ids) == 3
-
-    def test_empty_file_ids_raises_error(self):
-        """Test that empty file_ids list raises validation error."""
-        collection_id = uuid4()
-
+    def test_invalid_action_raises_validation_error(self):
+        """Invalid action raises ValidationError."""
         with pytest.raises(ValidationError) as exc_info:
-            CreateJobRequest(
-                collection_id=collection_id,
-                file_ids=[]
-            )
+            JobStateTransitionRequest(action="invalid_action")
 
         errors = exc_info.value.errors()
-        assert any("file_ids" in str(error) for error in errors)
+        assert len(errors) == 1
+        assert "action" in str(errors[0])
 
-    def test_missing_collection_id_raises_error(self):
-        """Test that missing collection_id raises validation error."""
-        with pytest.raises(ValidationError) as exc_info:
-            CreateJobRequest(file_ids=[uuid4()])
-
-        errors = exc_info.value.errors()
-        assert any("collection_id" in str(error) for error in errors)
-
-    def test_missing_file_ids_raises_error(self):
-        """Test that missing file_ids raises validation error."""
-        with pytest.raises(ValidationError) as exc_info:
-            CreateJobRequest(collection_id=uuid4())
-
-        errors = exc_info.value.errors()
-        assert any("file_ids" in str(error) for error in errors)
-
-    def test_invalid_uuid_raises_error(self):
-        """Test that invalid UUID format raises validation error."""
+    def test_empty_action_raises_validation_error(self):
+        """Empty string action raises ValidationError."""
         with pytest.raises(ValidationError):
-            CreateJobRequest(
-                collection_id="not-a-uuid",
-                file_ids=["also-not-a-uuid"]
-            )
+            JobStateTransitionRequest(action="")
+
+    def test_missing_action_raises_validation_error(self):
+        """Missing action field raises ValidationError."""
+        with pytest.raises(ValidationError) as exc_info:
+            JobStateTransitionRequest()  # type: ignore
+
+        errors = exc_info.value.errors()
+        assert any("action" in str(error) for error in errors)
 
 
-class TestJobResponse:
-    """Test JobResponse schema."""
+class TestJobStateTransitionResponse:
+    """Test JobStateTransitionResponse schema."""
 
     def test_valid_response(self):
-        """Test valid job response."""
+        """Valid response creates schema successfully."""
         job_id = uuid4()
-        status = "PRE_REGISTERING"
+        now = datetime.now(timezone.utc)
 
-        response = JobResponse(
+        response = JobStateTransitionResponse(
             job_id=job_id,
-            status=status
+            status=JobStatus.IN_PROGRESS,
+            transitioned_at=now,
         )
 
         assert response.job_id == job_id
-        assert response.status == status
+        assert response.status == JobStatus.IN_PROGRESS
+        assert response.transitioned_at == now
 
-    def test_response_serialization(self):
-        """Test response can be serialized to dict."""
+    def test_all_job_statuses_accepted(self):
+        """All JobStatus enum values are accepted."""
         job_id = uuid4()
-        status = "PRE_REGISTERING"
+        now = datetime.now(timezone.utc)
 
-        response = JobResponse(
-            job_id=job_id,
-            status=status
-        )
+        for status in JobStatus:
+            response = JobStateTransitionResponse(
+                job_id=job_id,
+                status=status,
+                transitioned_at=now,
+            )
+            assert response.status == status
 
-        data = response.model_dump()
-        assert data["job_id"] == job_id
-        assert data["status"] == status
+    def test_invalid_status_raises_validation_error(self):
+        """Invalid status string raises ValidationError."""
+        job_id = uuid4()
+        now = datetime.now(timezone.utc)
 
-    def test_missing_job_id_raises_error(self):
-        """Test that missing job_id raises validation error."""
         with pytest.raises(ValidationError) as exc_info:
-            JobResponse(status="PRE_REGISTERING")
-
-        errors = exc_info.value.errors()
-        assert any("job_id" in str(error) for error in errors)
-
-    def test_missing_status_raises_error(self):
-        """Test that missing status raises validation error."""
-        with pytest.raises(ValidationError) as exc_info:
-            JobResponse(job_id=uuid4())
+            JobStateTransitionResponse(
+                job_id=job_id,
+                status="INVALID_STATUS",  # type: ignore
+                transitioned_at=now,
+            )
 
         errors = exc_info.value.errors()
         assert any("status" in str(error) for error in errors)
+
+    def test_missing_fields_raise_validation_error(self):
+        """Missing required fields raise ValidationError."""
+        with pytest.raises(ValidationError) as exc_info:
+            JobStateTransitionResponse()  # type: ignore
+
+        errors = exc_info.value.errors()
+        # Should have errors for all 3 required fields
+        assert len(errors) == 3
+
+
+class TestConflictErrorResponse:
+    """Test ConflictErrorResponse schema."""
+
+    def test_valid_conflict_response(self):
+        """Valid conflict response creates schema successfully."""
+        response = ConflictErrorResponse(
+            detail="Cannot perform 'cancel' from state 'COMPLETED'",
+            current_state=JobStatus.COMPLETED,
+            attempted_action="cancel",
+        )
+
+        assert response.detail == "Cannot perform 'cancel' from state 'COMPLETED'"
+        assert response.current_state == JobStatus.COMPLETED
+        assert response.attempted_action == "cancel"
+
+    def test_all_states_and_actions_accepted(self):
+        """All states and action combinations are accepted."""
+        for status in JobStatus:
+            response = ConflictErrorResponse(
+                detail="Test error",
+                current_state=status,
+                attempted_action="test_action",
+            )
+            assert response.current_state == status
+            assert response.attempted_action == "test_action"
+
+    def test_missing_fields_raise_validation_error(self):
+        """Missing required fields raise ValidationError."""
+        with pytest.raises(ValidationError) as exc_info:
+            ConflictErrorResponse()  # type: ignore
+
+        errors = exc_info.value.errors()
+        # Should have errors for all 3 required fields
+        assert len(errors) == 3

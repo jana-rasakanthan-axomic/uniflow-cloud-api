@@ -29,6 +29,7 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B"]
+ignore = ["B008"]  # Allow function calls in FastAPI dependency injection
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
