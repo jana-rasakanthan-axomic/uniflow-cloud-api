@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     edge_rate_limit: int = 60  # Per agent
     rate_limit_window: int = 60  # Window in seconds
 
+    # Long-poll settings
+    poll_timeout_seconds: int = 55  # Timeout for long-poll connections
+
     # JWT settings
     jwt_secret: str = "dev-secret-change-in-production"
     jwt_algorithm: str = "HS256"

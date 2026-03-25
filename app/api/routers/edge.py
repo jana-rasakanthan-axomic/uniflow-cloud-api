@@ -2,14 +2,16 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_agent_id_from_jwt
+from app.config import settings
 from app.database import get_db
 from app.middleware.rate_limit_dependency import check_edge_rate_limit
 from app.schemas.edge import StateReportRequest, StateReportResponse
 from app.services.device_service import DeviceService
+from app.services.signaling_service import SignalingService
 from app.shared.enums import DeviceStatus
 
 router = APIRouter(dependencies=[Depends(check_edge_rate_limit)])
@@ -57,6 +59,50 @@ async def report_state(
 
 
 @router.get("/poll")
-async def poll():
-    """Placeholder long-poll endpoint."""
-    return {"message": "Poll endpoint - to be implemented"}
+async def poll(
+    agent_id: UUID = Query(..., description="Agent UUID"),
+    authenticated_agent_id: UUID = Depends(get_agent_id_from_jwt),
+    db: AsyncSession = Depends(get_db)
+) -> dict:
+    """Long-poll endpoint for agents to receive commands.
+
+    Holds connection for up to poll_timeout_seconds, returning immediately
+    if a pending command is available.
+
+    Args:
+        agent_id: Agent UUID from query parameter
+        authenticated_agent_id: Agent UUID from JWT token
+        db: Database session
+
+    Returns:
+        {"action": "none"} on timeout, or
+        {"action": <command_type>, "payload": <command_payload>} on command
+
+    Raises:
+        HTTPException: 403 if agent_id doesn't match JWT
+    """
+    # Validate agent_id matches JWT claim
+    if agent_id != authenticated_agent_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Agent ID does not match token"
+        )
+
+    # Get or create signaling service instance
+    signaling_service = SignalingService()
+
+    # Hold poll connection
+    command = await signaling_service.hold_poll(
+        db,
+        agent_id,
+        timeout=settings.poll_timeout_seconds
+    )
+
+    # Return command or timeout response
+    if command is None:
+        return {"action": "none"}
+
+    return {
+        "action": command.type,
+        "payload": command.payload_json
+    }
