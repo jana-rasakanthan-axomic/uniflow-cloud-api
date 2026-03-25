@@ -25,6 +25,7 @@ class JobFile(Base, UUIDPrimaryKeyMixin):
     status: Mapped[str] = mapped_column(nullable=False)
     chunks_completed: Mapped[int] = mapped_column(nullable=False)
     total_chunks: Mapped[int] = mapped_column(nullable=False)
+    streaming_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

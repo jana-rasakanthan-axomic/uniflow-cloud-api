@@ -1,6 +1,6 @@
 """Command repository for atomic command operations."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import select
@@ -46,3 +46,35 @@ class CommandRepository:
         await db.refresh(command)
 
         return command
+
+    async def expire_old_commands(
+        self,
+        db: AsyncSession,
+        threshold_hours: int = 24
+    ) -> int:
+        """Mark commands older than threshold as EXPIRED.
+
+        Args:
+            db: Database session
+            threshold_hours: Age threshold in hours
+
+        Returns:
+            Count of commands marked as EXPIRED
+        """
+        from sqlalchemy import update
+
+        # Calculate threshold timestamp
+        threshold = datetime.now(UTC) - timedelta(hours=threshold_hours)
+
+        # Update old PENDING commands to EXPIRED
+        stmt = (
+            update(Command)
+            .where(Command.created_at < threshold)
+            .where(Command.status == "PENDING")
+            .values(status="EXPIRED")
+        )
+
+        result = await db.execute(stmt)
+        await db.flush()
+
+        return result.rowcount if result.rowcount else 0

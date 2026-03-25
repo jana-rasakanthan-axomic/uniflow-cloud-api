@@ -130,3 +130,97 @@ class FileRepository:
             .values(status=new_status)
         )
         await db.flush()
+
+    async def verify_agent_ownership(
+        self,
+        db: AsyncSession,
+        agent_id: UUID,
+        file_ids: list[UUID]
+    ) -> bool:
+        """Verify that the requesting agent owns all specified files.
+
+        Args:
+            db: Database session
+            agent_id: Agent UUID requesting access
+            file_ids: List of file UUIDs to verify
+
+        Returns:
+            True if agent owns all files, False otherwise
+        """
+        from sqlalchemy import func
+        from app.models.asset import Asset
+        from app.models.folder import Folder
+        from app.models.device import Device
+
+        # Count how many of the requested files belong to this agent
+        # Chain: JobFile -> Asset -> Folder -> Device (which has agent_id)
+        stmt = (
+            select(func.count(JobFile.id))
+            .join(Asset, JobFile.asset_id == Asset.id)
+            .join(Folder, Asset.folder_id == Folder.id)
+            .join(Device, Folder.device_id == Device.id)
+            .where(JobFile.id.in_(file_ids))
+            .where(Device.agent_id == agent_id)
+        )
+
+        result = await db.execute(stmt)
+        count = result.scalar_one_or_none()
+
+        # Agent owns all files if count matches number of requested files
+        return count == len(file_ids)
+
+    async def update_file_status(
+        self,
+        db: AsyncSession,
+        file_id: UUID,
+        status: str,
+        chunks_completed: int | None = None,
+        total_chunks: int | None = None,
+        streaming_hash: str | None = None,
+        error_message: str | None = None
+    ) -> JobFile:
+        """Update file upload status and progress.
+
+        Args:
+            db: Database session
+            file_id: File UUID
+            status: New status value
+            chunks_completed: Optional number of chunks completed
+            total_chunks: Optional total number of chunks
+            streaming_hash: Optional SHA-256 hash computed during upload
+            error_message: Optional error message
+
+        Returns:
+            Updated JobFile instance
+
+        Raises:
+            ValueError: If status transition is invalid
+        """
+        # Build update values
+        update_values = {"status": status}
+
+        if chunks_completed is not None:
+            update_values["chunks_completed"] = chunks_completed
+
+        if total_chunks is not None:
+            update_values["total_chunks"] = total_chunks
+
+        if streaming_hash is not None:
+            update_values["streaming_hash"] = streaming_hash
+
+        if error_message is not None:
+            update_values["error_message"] = error_message
+
+        # Execute update
+        await db.execute(
+            update(JobFile)
+            .where(JobFile.id == file_id)
+            .values(**update_values)
+        )
+        await db.flush()
+
+        # Retrieve and return updated file
+        result = await db.execute(
+            select(JobFile).where(JobFile.id == file_id)
+        )
+        return result.scalar_one()
