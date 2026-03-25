@@ -31,7 +31,8 @@ class Settings(BaseSettings):
     oa_retry_delays: list[int] = [2, 5, 15, 60]  # Exponential backoff delays (seconds)
 
     # AWS STS settings for direct S3 upload
-    aws_sts_role_arn: str = "arn:aws:iam::123456789012:role/uniflow-upload-role"  # Override in production
+    # Override in production
+    aws_sts_role_arn: str = "arn:aws:iam::123456789012:role/uniflow-upload-role"
     aws_s3_bucket_name: str = "uniflow-uploads-dev"  # Override in production
     aws_region: str = "us-east-1"
     sts_token_duration_seconds: int = 43200  # 12 hours

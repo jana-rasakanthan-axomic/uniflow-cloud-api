@@ -6,11 +6,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from app.exceptions import (
-    InvalidSetupCodeError,
-    SetupCodeExpiredError,
-    SetupCodeAlreadyUsedError
-)
+from app.exceptions import InvalidSetupCodeError, SetupCodeAlreadyUsedError, SetupCodeExpiredError
 from app.models.device import Device
 from app.models.setup_code import SetupCode
 from app.services.device_service import DeviceService, TokenPair

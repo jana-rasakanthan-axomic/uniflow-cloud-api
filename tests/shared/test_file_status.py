@@ -1,6 +1,5 @@
 """Tests for FileStatus enum."""
 
-import pytest
 
 from app.shared.enums.file_status import FileStatus
 

@@ -6,12 +6,12 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker, selectinload
+from sqlalchemy.orm import sessionmaker
 
-from app.models.refresh_token import RefreshToken
-from app.models.user import User
 from app.models.device import Device
 from app.models.organization import Organization
+from app.models.refresh_token import RefreshToken
+from app.models.user import User
 from app.repositories.refresh_token_repository import RefreshTokenRepository
 
 

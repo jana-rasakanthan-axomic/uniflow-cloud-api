@@ -1,6 +1,5 @@
 """Tests for JobStatus enum."""
 
-import pytest
 
 from app.shared.enums.job_status import JobStatus
 

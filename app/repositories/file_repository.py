@@ -1,5 +1,6 @@
 """File repository for job_files database operations."""
 
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import select, update
@@ -148,9 +149,10 @@ class FileRepository:
             True if agent owns all files, False otherwise
         """
         from sqlalchemy import func
+
         from app.models.asset import Asset
-        from app.models.folder import Folder
         from app.models.device import Device
+        from app.models.folder import Folder
 
         # Count how many of the requested files belong to this agent
         # Chain: JobFile -> Asset -> Folder -> Device (which has agent_id)
@@ -197,7 +199,7 @@ class FileRepository:
             ValueError: If status transition is invalid
         """
         # Build update values
-        update_values = {"status": status}
+        update_values: dict[str, Any] = {"status": status}
 
         if chunks_completed is not None:
             update_values["chunks_completed"] = chunks_completed

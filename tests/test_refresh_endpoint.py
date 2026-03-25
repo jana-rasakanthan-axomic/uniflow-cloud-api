@@ -6,7 +6,7 @@ from uuid import uuid4
 
 import jwt
 import pytest
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
 from app.config import settings
 from app.exceptions import InvalidTokenError, RevokedTokenError
@@ -70,7 +70,9 @@ class TestRefreshEndpoint:
                 refresh_token="new_refresh_token"
             ))
 
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.post(
                     "/api/v1/auth/tokens/refresh",
                     json={"refresh_token": valid_refresh_token_jwt}
@@ -90,7 +92,9 @@ class TestRefreshEndpoint:
             mock_service = mock_service_class.return_value
             mock_service.refresh_tokens = AsyncMock(side_effect=InvalidTokenError("Invalid token"))
 
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.post(
                     "/api/v1/auth/tokens/refresh",
                     json={"refresh_token": "invalid.token.here"}
@@ -109,7 +113,9 @@ class TestRefreshEndpoint:
             mock_service = mock_service_class.return_value
             mock_service.refresh_tokens = AsyncMock(side_effect=RevokedTokenError("Token revoked"))
 
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.post(
                     "/api/v1/auth/tokens/refresh",
                     json={"refresh_token": valid_refresh_token_jwt}

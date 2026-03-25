@@ -1,6 +1,7 @@
 """Device repository for database operations."""
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select, update
@@ -78,7 +79,7 @@ class DeviceRepository:
             last_seen = datetime.now(UTC)
 
         # Build update values
-        update_values = {
+        update_values: dict[str, Any] = {
             "status": status.value,
             "last_seen_at": last_seen
         }

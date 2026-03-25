@@ -10,12 +10,13 @@ import jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.exceptions import (
     InvalidSetupCodeError,
-    SetupCodeExpiredError,
-    SetupCodeAlreadyUsedError,
     InvalidTokenError,
-    RevokedTokenError
+    RevokedTokenError,
+    SetupCodeAlreadyUsedError,
+    SetupCodeExpiredError,
 )
 from app.models.device import Device
 from app.models.refresh_token import RefreshToken
@@ -25,7 +26,6 @@ from app.repositories.refresh_token_repository import RefreshTokenRepository
 from app.services.audit_service import AuditService
 from app.services.jwt_service import JWTService
 from app.shared.enums import DeviceStatus
-from app.config import settings
 
 
 @dataclass
@@ -157,15 +157,15 @@ class DeviceService:
         code = await self._find_setup_code(db, setup_code)
 
         if code is None:
-            raise InvalidSetupCodeError(f"Setup code not found")
+            raise InvalidSetupCodeError("Setup code not found")
 
         # Check if expired
         if code.expires_at < datetime.now(UTC):
-            raise SetupCodeExpiredError(f"Setup code has expired")
+            raise SetupCodeExpiredError("Setup code has expired")
 
         # Check if already used
         if code.used_at is not None:
-            raise SetupCodeAlreadyUsedError(f"Setup code already used")
+            raise SetupCodeAlreadyUsedError("Setup code already used")
 
         # Mark as used
         code.used_at = datetime.now(UTC)
@@ -428,7 +428,7 @@ class DeviceService:
         try:
             claims = self.jwt_service.verify_token(refresh_token)
         except (jwt.ExpiredSignatureError, jwt.InvalidSignatureError, jwt.DecodeError):
-            raise InvalidTokenError("Invalid or expired refresh token")
+            raise InvalidTokenError("Invalid or expired refresh token") from None
 
         # Step 2: Look up token in database by hash
         token_hash = self._hash_token(refresh_token)

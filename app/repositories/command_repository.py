@@ -3,7 +3,8 @@
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.command import Command
@@ -61,8 +62,6 @@ class CommandRepository:
         Returns:
             Count of commands marked as EXPIRED
         """
-        from sqlalchemy import update
-
         # Calculate threshold timestamp
         threshold = datetime.now(UTC) - timedelta(hours=threshold_hours)
 
@@ -74,7 +73,7 @@ class CommandRepository:
             .values(status="EXPIRED")
         )
 
-        result = await db.execute(stmt)
+        result: CursorResult = await db.execute(stmt)  # type: ignore[assignment]
         await db.flush()
 
         return result.rowcount if result.rowcount else 0

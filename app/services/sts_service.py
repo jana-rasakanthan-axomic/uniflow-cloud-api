@@ -1,6 +1,5 @@
 """STS credential issuance service for direct S3 uploads."""
 
-import json
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -39,7 +38,7 @@ class STSService:
             Exception: If AWS STS call fails
         """
         # Generate IAM policy scoped to specific S3 paths
-        policy = self._generate_upload_policy(org_id, job_id, agent_id)
+        _policy = self._generate_upload_policy(org_id, job_id, agent_id)
 
         # For MVP, we'll mock the STS credentials
         # In production, this would call boto3.client('sts').assume_role()

@@ -1,13 +1,13 @@
 """Tests for JWT service."""
 
 from datetime import UTC, datetime, timedelta
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import jwt
 import pytest
 
-from app.services.jwt_service import JWTService
 from app.config import settings
+from app.services.jwt_service import JWTService
 
 
 class TestJWTService:

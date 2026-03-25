@@ -5,10 +5,10 @@ Values must be kept in sync with TypeScript FileStatus enum in uniflow-edge and
 uniflow-cloud-portal.
 """
 
-from enum import Enum
+from enum import StrEnum
 
 
-class FileStatus(str, Enum):
+class FileStatus(StrEnum):
     """File status values shared across edge, portal, and cloud API."""
 
     DISCOVERED = "DISCOVERED"

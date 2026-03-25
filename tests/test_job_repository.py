@@ -136,7 +136,7 @@ class TestJobRepository:
         expires_at = datetime.now(UTC) + timedelta(days=7)
 
         # Create job in PRE_REGISTERING
-        job = await job_repository.create(
+        await job_repository.create(
             db=db_session,
             job_id=job_id,
             org_id=test_org.id,
@@ -168,7 +168,7 @@ class TestJobRepository:
         expires_at = datetime.now(UTC) + timedelta(days=7)
 
         # Create job
-        job = await job_repository.create(
+        await job_repository.create(
             db=db_session,
             job_id=job_id,
             org_id=test_org.id,

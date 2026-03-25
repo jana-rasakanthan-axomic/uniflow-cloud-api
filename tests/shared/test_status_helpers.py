@@ -1,6 +1,5 @@
 """Tests for status helper utilities including color mappings."""
 
-import pytest
 
 from app.shared.constants.status_colors import STATUS_COLORS
 from app.shared.enums.job_status import JobStatus

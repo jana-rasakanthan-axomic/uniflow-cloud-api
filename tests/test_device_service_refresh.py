@@ -2,14 +2,13 @@
 
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import jwt
 import pytest
 
 from app.config import settings
 from app.exceptions import InvalidTokenError, RevokedTokenError
-from app.models.device import Device
 from app.models.refresh_token import RefreshToken
 from app.services.device_service import DeviceService, TokenPair
 
@@ -108,7 +107,9 @@ class TestDeviceServiceRefresh:
         source_ip = "192.168.1.100"
 
         # Mock the repository instance on the service
-        device_service.token_repository.find_by_token_hash = AsyncMock(return_value=mock_refresh_token_record)
+        device_service.token_repository.find_by_token_hash = AsyncMock(
+            return_value=mock_refresh_token_record
+        )
         device_service.token_repository.revoke = AsyncMock()
         device_service.token_repository.create = AsyncMock(return_value=mock_refresh_token_record)
 
@@ -143,7 +144,9 @@ class TestDeviceServiceRefresh:
         """Test that new refresh token has incremented sequence_num."""
         source_ip = "192.168.1.100"
 
-        device_service.token_repository.find_by_token_hash = AsyncMock(return_value=mock_refresh_token_record)
+        device_service.token_repository.find_by_token_hash = AsyncMock(
+            return_value=mock_refresh_token_record
+        )
         device_service.token_repository.revoke = AsyncMock()
 
         # Capture the token that was created
@@ -247,7 +250,9 @@ class TestDeviceServiceRefresh:
         # Make the token already revoked
         mock_refresh_token_record.revoked_at = datetime.now(UTC)
 
-        device_service.token_repository.find_by_token_hash = AsyncMock(return_value=mock_refresh_token_record)
+        device_service.token_repository.find_by_token_hash = AsyncMock(
+            return_value=mock_refresh_token_record
+        )
         device_service.token_repository.revoke_chain = AsyncMock(return_value=3)
 
         with pytest.raises(RevokedTokenError):
@@ -271,7 +276,9 @@ class TestDeviceServiceRefresh:
         # Make the token already revoked
         mock_refresh_token_record.revoked_at = datetime.now(UTC)
 
-        device_service.token_repository.find_by_token_hash = AsyncMock(return_value=mock_refresh_token_record)
+        device_service.token_repository.find_by_token_hash = AsyncMock(
+            return_value=mock_refresh_token_record
+        )
         device_service.token_repository.revoke_chain = AsyncMock(return_value=3)
 
         with patch.object(device_service.audit_service, "log_event") as mock_log:

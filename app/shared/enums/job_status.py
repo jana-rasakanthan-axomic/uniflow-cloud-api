@@ -4,10 +4,10 @@ This enum defines all possible states for a job (upload batch) in the UniFlow sy
 Values must be kept in sync with TypeScript JobStatus enum in uniflow-edge and uniflow-cloud-portal.
 """
 
-from enum import Enum
+from enum import StrEnum
 
 
-class JobStatus(str, Enum):
+class JobStatus(StrEnum):
     """Job status values shared across edge, portal, and cloud API."""
 
     PRE_REGISTERING = "PRE_REGISTERING"

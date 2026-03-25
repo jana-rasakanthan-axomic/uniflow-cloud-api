@@ -1,6 +1,5 @@
 """Integration tests for POST /auth/device/link endpoint."""
 
-from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
@@ -9,11 +8,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from app.api.routers.auth import router as auth_router
-from app.exceptions import (
-    InvalidSetupCodeError,
-    SetupCodeExpiredError,
-    SetupCodeAlreadyUsedError
-)
+from app.exceptions import InvalidSetupCodeError, SetupCodeAlreadyUsedError, SetupCodeExpiredError
 from app.services.device_service import TokenPair
 
 
@@ -52,8 +47,8 @@ class TestDeviceLinkEndpoint:
             refresh_token="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh"
         )
 
-        with patch("app.api.routers.auth.DeviceService") as MockDeviceService:
-            mock_service = MockDeviceService.return_value
+        with patch("app.api.routers.auth.DeviceService") as mock_device_service:
+            mock_service = mock_device_service.return_value
             mock_service.link_device = AsyncMock(return_value=mock_token_pair)
 
             response = await client.post("/auth/device/link", json=request_data)
@@ -75,8 +70,8 @@ class TestDeviceLinkEndpoint:
             "os": "Windows 11"
         }
 
-        with patch("app.api.routers.auth.DeviceService") as MockDeviceService:
-            mock_service = MockDeviceService.return_value
+        with patch("app.api.routers.auth.DeviceService") as mock_device_service:
+            mock_service = mock_device_service.return_value
             mock_service.link_device = AsyncMock(
                 side_effect=InvalidSetupCodeError("Invalid code")
             )
@@ -96,8 +91,8 @@ class TestDeviceLinkEndpoint:
             "os": "Windows 11"
         }
 
-        with patch("app.api.routers.auth.DeviceService") as MockDeviceService:
-            mock_service = MockDeviceService.return_value
+        with patch("app.api.routers.auth.DeviceService") as mock_device_service:
+            mock_service = mock_device_service.return_value
             mock_service.link_device = AsyncMock(
                 side_effect=SetupCodeExpiredError("Expired")
             )
@@ -116,8 +111,8 @@ class TestDeviceLinkEndpoint:
             "os": "Windows 11"
         }
 
-        with patch("app.api.routers.auth.DeviceService") as MockDeviceService:
-            mock_service = MockDeviceService.return_value
+        with patch("app.api.routers.auth.DeviceService") as mock_device_service:
+            mock_service = mock_device_service.return_value
             mock_service.link_device = AsyncMock(
                 side_effect=SetupCodeAlreadyUsedError("Already used")
             )
@@ -207,8 +202,8 @@ class TestDeviceLinkEndpoint:
             refresh_token="refresh_token"
         )
 
-        with patch("app.api.routers.auth.DeviceService") as MockDeviceService:
-            mock_service = MockDeviceService.return_value
+        with patch("app.api.routers.auth.DeviceService") as mock_device_service:
+            mock_service = mock_device_service.return_value
             mock_service.link_device = AsyncMock(return_value=mock_token_pair)
 
             response = await client.post(
@@ -239,8 +234,8 @@ class TestDeviceLinkEndpoint:
             refresh_token="refresh_token"
         )
 
-        with patch("app.api.routers.auth.DeviceService") as MockDeviceService:
-            mock_service = MockDeviceService.return_value
+        with patch("app.api.routers.auth.DeviceService") as mock_device_service:
+            mock_service = mock_device_service.return_value
             mock_service.link_device = AsyncMock(return_value=mock_token_pair)
 
             response = await client.post("/auth/device/link", json=request_data)

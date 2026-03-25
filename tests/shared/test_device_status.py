@@ -1,6 +1,5 @@
 """Tests for DeviceStatus enum."""
 
-import pytest
 
 from app.shared.enums.device_status import DeviceStatus
 

@@ -14,7 +14,7 @@ class RateLimiter:
     providing O(W) performance where W is the number of requests in the window.
     """
 
-    def __init__(self, requests: int, window_seconds: int, key_func: Callable = None):
+    def __init__(self, requests: int, window_seconds: int, key_func: Callable | None = None):
         """
         Initialize rate limiter.
 

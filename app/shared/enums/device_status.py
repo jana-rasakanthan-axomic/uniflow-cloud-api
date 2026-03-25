@@ -5,10 +5,10 @@ Values must be kept in sync with TypeScript DeviceStatus enum in uniflow-edge an
 uniflow-cloud-portal.
 """
 
-from enum import Enum
+from enum import StrEnum
 
 
-class DeviceStatus(str, Enum):
+class DeviceStatus(StrEnum):
     """Device status values shared across edge, portal, and cloud API."""
 
     ONLINE = "ONLINE"

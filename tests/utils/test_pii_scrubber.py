@@ -1,6 +1,5 @@
 """Tests for PII scrubbing log filter."""
 
-import pytest
 
 from app.utils.pii_scrubber import scrub_pii
 

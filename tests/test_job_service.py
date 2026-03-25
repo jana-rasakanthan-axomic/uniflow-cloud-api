@@ -1,6 +1,6 @@
 """Tests for JobService - Mock repository tests."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -40,10 +40,10 @@ class TestTransitionState:
         job.status = JobStatus.WAITING_FOR_AGENT
         job.org_id = uuid4()
         job.collection_id = uuid4()
-        job.expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+        job.expires_at = datetime.now(UTC) + timedelta(days=7)
         job.completed_at = None
-        job.created_at = datetime.now(timezone.utc)
-        job.updated_at = datetime.now(timezone.utc)
+        job.created_at = datetime.now(UTC)
+        job.updated_at = datetime.now(UTC)
         return job
 
     async def test_transition_state_success(
@@ -160,12 +160,12 @@ class TestCheckTimeouts:
         expired_job1 = MagicMock(spec=Job)
         expired_job1.id = uuid4()
         expired_job1.status = JobStatus.WAITING_FOR_AGENT
-        expired_job1.expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        expired_job1.expires_at = datetime.now(UTC) - timedelta(hours=1)
 
         expired_job2 = MagicMock(spec=Job)
         expired_job2.id = uuid4()
         expired_job2.status = JobStatus.WAITING_FOR_AGENT
-        expired_job2.expires_at = datetime.now(timezone.utc) - timedelta(days=1)
+        expired_job2.expires_at = datetime.now(UTC) - timedelta(days=1)
 
         mock_job_repo.find_expired_jobs = AsyncMock(
             return_value=[expired_job1, expired_job2]
@@ -211,7 +211,7 @@ class TestCheckTimeouts:
         expired_job = MagicMock(spec=Job)
         expired_job.id = uuid4()
         expired_job.status = JobStatus.WAITING_FOR_AGENT
-        expired_job.expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        expired_job.expires_at = datetime.now(UTC) - timedelta(hours=1)
 
         # Repository returns only WAITING_FOR_AGENT jobs
         mock_job_repo.find_expired_jobs = AsyncMock(return_value=[expired_job])

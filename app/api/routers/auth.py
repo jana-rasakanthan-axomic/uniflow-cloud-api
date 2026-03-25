@@ -6,17 +6,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.exceptions import (
     InvalidSetupCodeError,
-    SetupCodeExpiredError,
-    SetupCodeAlreadyUsedError,
     InvalidTokenError,
-    RevokedTokenError
+    RevokedTokenError,
+    SetupCodeAlreadyUsedError,
+    SetupCodeExpiredError,
 )
 from app.middleware.rate_limit_dependency import check_auth_rate_limit
 from app.schemas.auth import (
     DeviceLinkRequest,
     DeviceLinkResponse,
     TokenRefreshRequest,
-    TokenRefreshResponse
+    TokenRefreshResponse,
 )
 from app.services.device_service import DeviceService
 
@@ -89,13 +89,13 @@ async def device_link(
         raise HTTPException(
             status_code=status.HTTP_410_GONE,
             detail="Setup code already used"
-        )
+        ) from None
 
     except (InvalidSetupCodeError, SetupCodeExpiredError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired setup code"
-        )
+        ) from None
 
 
 @router.post("/tokens/refresh", response_model=TokenRefreshResponse)
@@ -144,13 +144,13 @@ async def refresh_token(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid or revoked token"
-        )
+        ) from None
 
     except InvalidTokenError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token"
-        )
+        ) from None
 
 
 def _extract_source_ip(request: Request) -> str:

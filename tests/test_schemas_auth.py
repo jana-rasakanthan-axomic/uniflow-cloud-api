@@ -1,8 +1,9 @@
 """Tests for auth request/response schemas."""
 
+from uuid import UUID
+
 import pytest
 from pydantic import ValidationError
-from uuid import UUID
 
 from app.schemas.auth import DeviceLinkRequest, DeviceLinkResponse
 

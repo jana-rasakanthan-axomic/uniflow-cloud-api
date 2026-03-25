@@ -1,6 +1,6 @@
 """Tests for job schemas (Pydantic models)."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -69,7 +69,7 @@ class TestJobStateTransitionResponse:
     def test_valid_response(self):
         """Valid response creates schema successfully."""
         job_id = uuid4()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         response = JobStateTransitionResponse(
             job_id=job_id,
@@ -84,7 +84,7 @@ class TestJobStateTransitionResponse:
     def test_all_job_statuses_accepted(self):
         """All JobStatus enum values are accepted."""
         job_id = uuid4()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         for status in JobStatus:
             response = JobStateTransitionResponse(
@@ -97,7 +97,7 @@ class TestJobStateTransitionResponse:
     def test_invalid_status_raises_validation_error(self):
         """Invalid status string raises ValidationError."""
         job_id = uuid4()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         with pytest.raises(ValidationError) as exc_info:
             JobStateTransitionResponse(
