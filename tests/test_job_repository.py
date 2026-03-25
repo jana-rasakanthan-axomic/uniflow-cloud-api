@@ -17,7 +17,10 @@ from app.repositories.job_repository import JobRepository
 @pytest.fixture
 async def engine():
     """Create in-memory SQLite engine for testing."""
+    from app.models.asset import Asset
     from app.models.device import Device
+    from app.models.folder import Folder
+    from app.models.job_file import JobFile
     from app.models.setup_code import SetupCode
     from app.models.user import User
 
@@ -27,15 +30,15 @@ async def engine():
     )
 
     async with engine.begin() as conn:
-        # Create only the tables we need (avoid JSONB tables like Command/Asset)
         await conn.run_sync(Organization.__table__.create)
         await conn.run_sync(User.__table__.create)
         await conn.run_sync(Device.__table__.create)
         await conn.run_sync(SetupCode.__table__.create)
+        await conn.run_sync(Folder.__table__.create)
+        await conn.run_sync(Asset.__table__.create)
         await conn.run_sync(Collection.__table__.create)
         await conn.run_sync(Job.__table__.create)
-        # Note: Not creating JobFile table since Job relationship uses lazy="selectin"
-        # but we'll disable relationship loading in tests
+        await conn.run_sync(JobFile.__table__.create)
 
     yield engine
 

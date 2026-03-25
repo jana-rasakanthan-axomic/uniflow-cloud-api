@@ -10,27 +10,25 @@ from sqlalchemy.orm import sessionmaker
 
 from app.models.asset import Asset
 from app.models.collection import Collection
+from app.models.device import Device
 from app.models.folder import Folder
 from app.models.job import Job
 from app.models.job_file import JobFile
 from app.models.organization import Organization
+from app.models.setup_code import SetupCode
+from app.models.user import User
 from app.repositories.file_repository import FileRepository
 
 
 @pytest.fixture
 async def engine():
     """Create in-memory SQLite engine for testing."""
-    from app.models.device import Device
-    from app.models.setup_code import SetupCode
-    from app.models.user import User
-
     engine = create_async_engine(
         "sqlite+aiosqlite:///:memory:",
         echo=False,
     )
 
     async with engine.begin() as conn:
-        # Create only the tables we need (avoid JSONB tables like Command)
         await conn.run_sync(Organization.__table__.create)
         await conn.run_sync(User.__table__.create)
         await conn.run_sync(Device.__table__.create)
@@ -74,13 +72,43 @@ async def test_org(db_session):
 
 
 @pytest.fixture
-async def test_folder(db_session, test_org):
+async def test_device(db_session, test_org):
+    """Create a test device (required for folders)."""
+    user = User(
+        id=uuid4(),
+        org_id=test_org.id,
+        email="test@example.com",
+        role="contributor",
+        created_at=datetime.now(UTC)
+    )
+    db_session.add(user)
+    await db_session.flush()
+
+    device = Device(
+        id=uuid4(),
+        org_id=test_org.id,
+        user_id=user.id,
+        agent_id=uuid4(),
+        machine_name="test-machine",
+        os="macOS",
+        status="ONLINE",
+        created_at=datetime.now(UTC)
+    )
+    db_session.add(device)
+    await db_session.commit()
+    await db_session.refresh(device)
+    return device
+
+
+@pytest.fixture
+async def test_folder(db_session, test_device):
     """Create a test folder."""
     folder = Folder(
         id=uuid4(),
-        org_id=test_org.id,
-        path="/test/path",
-        created_at=datetime.now(UTC)
+        device_id=test_device.id,
+        path_hash="abc123",
+        relative_path="/test/path",
+        file_count=0,
     )
     db_session.add(folder)
     await db_session.commit()
