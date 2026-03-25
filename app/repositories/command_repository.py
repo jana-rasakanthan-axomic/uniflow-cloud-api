@@ -42,8 +42,8 @@ class CommandRepository:
         command.status = "DELIVERED"
         command.delivered_at = datetime.now(UTC)
 
-        # Commit the change
-        await db.commit()
+        # Flush changes (let caller handle commit)
+        await db.flush()
         await db.refresh(command)
 
         return command

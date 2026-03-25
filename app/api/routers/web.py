@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.dependencies import get_signaling_service
 from app.database import get_db
 from app.exceptions.job_exceptions import InvalidTransitionError
 from app.middleware.rate_limit_dependency import check_web_rate_limit
@@ -18,6 +19,7 @@ from app.schemas.job_schemas import (
 )
 from app.services.command_service import CommandService
 from app.services.job_service import JobService
+from app.services.signaling_service import SignalingService
 from app.shared.enums.job_status import JobStatus
 
 router = APIRouter(dependencies=[Depends(check_web_rate_limit)])
@@ -121,13 +123,15 @@ async def transition_job_state(
 @router.post("/commands", response_model=CommandCreateResponse, status_code=status.HTTP_201_CREATED)
 async def create_command(
     request: CommandCreateRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    signaling_service: SignalingService = Depends(get_signaling_service)
 ) -> CommandCreateResponse:
     """Create a command for an edge agent.
 
     Args:
         request: Command creation request
         db: Database session
+        signaling_service: Singleton SignalingService
 
     Returns:
         CommandCreateResponse with command_id and queued status
@@ -136,7 +140,7 @@ async def create_command(
         HTTPException 400: Invalid command type
         HTTPException 401: Unauthorized (not authenticated)
     """
-    command_service = CommandService()
+    command_service = CommandService(signaling_service=signaling_service)
 
     try:
         command = await command_service.create_command(

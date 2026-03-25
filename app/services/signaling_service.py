@@ -97,15 +97,16 @@ class SignalingService:
             # Wait for event to be set or timeout
             try:
                 await asyncio.wait_for(event.wait(), timeout=timeout)
-            except TimeoutError:
-                # Timeout expired, check for command one more time
+            except (TimeoutError, asyncio.CancelledError):
+                # Timeout expired or cancelled, check for command one more time
                 pass
 
             # Check for pending command (may have been added while we were waiting)
             command = await self.command_repository.pop_pending(db, agent_id)
             return command
         finally:
-            # Clean up event
+            # Clean up event (don't delete immediately, let it be garbage collected)
+            # to avoid race conditions with dispatch_command
             async with self._events_lock:
                 self._poll_events.pop(agent_id, None)
                 self.active_poll_agent_ids.discard(agent_id)

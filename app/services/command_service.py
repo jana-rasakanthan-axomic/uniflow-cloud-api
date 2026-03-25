@@ -15,10 +15,15 @@ class CommandService:
 
     VALID_COMMAND_TYPES = {"upload_request", "pause", "resume", "refresh_scan"}
 
-    def __init__(self):
-        """Initialize command service."""
+    def __init__(self, signaling_service: SignalingService | None = None):
+        """Initialize command service.
+
+        Args:
+            signaling_service: Optional SignalingService singleton instance.
+                If None, creates a new instance (for backwards compatibility).
+        """
         self.command_repository = CommandRepository()
-        self.signaling_service = SignalingService()
+        self.signaling_service = signaling_service or SignalingService()
 
     async def create_command(
         self,

@@ -3,10 +3,11 @@
 from uuid import UUID
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.config import settings
+from app.services.signaling_service import SignalingService
 
 # HTTP Bearer security scheme
 security = HTTPBearer()
@@ -68,3 +69,15 @@ async def get_agent_id_from_jwt(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid agent ID format"
         )
+
+
+def get_signaling_service(request: Request) -> SignalingService:
+    """Get singleton SignalingService from app state.
+
+    Args:
+        request: FastAPI request object
+
+    Returns:
+        SignalingService singleton instance
+    """
+    return request.app.state.signaling_service

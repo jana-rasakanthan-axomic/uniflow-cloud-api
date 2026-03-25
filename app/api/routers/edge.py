@@ -5,11 +5,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_agent_id_from_jwt
+from app.api.dependencies import get_agent_id_from_jwt, get_signaling_service
 from app.config import settings
 from app.database import get_db
 from app.middleware.rate_limit_dependency import check_edge_rate_limit
 from app.repositories.file_repository import FileRepository
+from app.repositories.job_repository import JobRepository
 from app.schemas.edge import StateReportRequest, StateReportResponse
 from app.schemas.upload import ProgressRequest, ProgressResponse, STSRequest, STSResponse
 from app.services.device_service import DeviceService
@@ -65,7 +66,8 @@ async def report_state(
 async def poll(
     agent_id: UUID = Query(..., description="Agent UUID"),
     authenticated_agent_id: UUID = Depends(get_agent_id_from_jwt),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    signaling_service: SignalingService = Depends(get_signaling_service)
 ) -> dict:
     """Long-poll endpoint for agents to receive commands.
 
@@ -76,6 +78,7 @@ async def poll(
         agent_id: Agent UUID from query parameter
         authenticated_agent_id: Agent UUID from JWT token
         db: Database session
+        signaling_service: Singleton SignalingService
 
     Returns:
         {"action": "none"} on timeout, or
@@ -91,9 +94,6 @@ async def poll(
             detail="Agent ID does not match token"
         )
 
-    # Get or create signaling service instance
-    signaling_service = SignalingService()
-
     # Hold poll connection
     command = await signaling_service.hold_poll(
         db,
@@ -104,6 +104,9 @@ async def poll(
     # Return command or timeout response
     if command is None:
         return {"action": "none"}
+
+    # Commit the command status update (from PENDING to DELIVERED)
+    await db.commit()
 
     return {
         "action": command.type,
@@ -134,6 +137,16 @@ async def issue_sts_credentials(
         HTTPException 404: Job not found or files not in PRE_REGISTERED state
         HTTPException 500: AWS STS call failed
     """
+    # Verify job exists
+    job_repo = JobRepository()
+    job = await job_repo.find_by_id(db, request.job_id)
+
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found"
+        )
+
     # Verify agent owns all requested files
     file_repo = FileRepository()
     owns_files = await file_repo.verify_agent_ownership(db, agent_id, request.file_ids)
@@ -144,22 +157,36 @@ async def issue_sts_credentials(
             detail="Agent does not own all requested files"
         )
 
-    # TODO: Verify job exists and files are in correct state
-    # TODO: Get org_id from job/agent context
-    # For now, using mock org_id
-    from uuid import uuid4
-    org_id = uuid4()
+    # Get org_id from job
+    org_id = job.org_id
 
-    # Build file targets
-    # TODO: Get actual file metadata from database
-    file_targets = [
-        {
+    # Build file targets with actual file metadata
+    file_targets = []
+    job_files = await file_repo.find_by_job_id(db, request.job_id)
+
+    # Create a map of file_id to job_file for quick lookup
+    file_map = {jf.id: jf for jf in job_files}
+
+    for file_id in request.file_ids:
+        job_file = file_map.get(file_id)
+        if job_file is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"File {file_id} not found in job"
+            )
+
+        # Verify file is in PRE_REGISTERED state
+        if job_file.status != "PRE_REGISTERED":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File {file_id} is not in PRE_REGISTERED state"
+            )
+
+        file_targets.append({
             "file_id": file_id,
-            "oa_asset_id": f"oa_{file_id.hex[:8]}",
-            "filename": f"file_{file_id.hex[:8]}.jpg"
-        }
-        for file_id in request.file_ids
-    ]
+            "oa_asset_id": job_file.oa_asset_id or f"oa_{file_id.hex[:8]}",
+            "filename": f"file_{file_id.hex[:8]}.jpg"  # TODO: Get from asset metadata
+        })
 
     # Issue STS credentials
     sts_service = STSService()
