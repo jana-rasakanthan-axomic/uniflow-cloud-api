@@ -1,0 +1,5 @@
+profile: python-fastapi
+workspace:
+  root: ..
+artifacts:
+  root: .claude
