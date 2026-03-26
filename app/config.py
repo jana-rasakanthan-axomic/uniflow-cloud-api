@@ -2,11 +2,18 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
+    # Environment (development, test, production)
+    env: str = "development"
+
     cors_origins: list[str] = ["http://localhost:3000"]
     debug: bool = False
     database_url: str = "postgresql+asyncpg://postgres:test@localhost:5432/uniflow_test"
     db_pool_size: int = 10
     db_max_overflow: int = 5
+
+    # Security settings
+    trusted_proxy_headers: bool = True  # Trust X-Forwarded-For (only safe behind ALB)
+    enforce_tls: bool = True  # Enforce TLS in production
 
     # Rate limiting settings (requests per minute)
     auth_rate_limit: int = 20  # Per IP
@@ -38,6 +45,24 @@ class Settings(BaseSettings):
     sts_token_duration_seconds: int = 43200  # 12 hours
 
     model_config = {"env_prefix": "UNIFLOW_"}
+
+    def model_post_init(self, __context):
+        """Validate secrets are not using dev defaults in production."""
+        # Check environment - allow dev defaults in development and test
+        if self.env not in ("development", "test"):
+            # Check JWT secret
+            if self.jwt_secret == "dev-secret-change-in-production":
+                raise ValueError(
+                    "CRITICAL: jwt_secret is using dev default in non-development environment. "
+                    "Set UNIFLOW_JWT_SECRET to a secure random value."
+                )
+
+            # Check OA API key
+            if self.oa_api_key == "dev-placeholder-key":
+                raise ValueError(
+                    "CRITICAL: oa_api_key is using dev default in non-development environment. "
+                    "Set UNIFLOW_OA_API_KEY to your actual OpenAsset API key."
+                )
 
 
 settings = Settings()

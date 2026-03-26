@@ -11,7 +11,7 @@ from app.exceptions import (
     SetupCodeAlreadyUsedError,
     SetupCodeExpiredError,
 )
-from app.middleware.rate_limit_dependency import check_auth_rate_limit
+from app.middleware.rate_limit_dependency import check_auth_rate_limit, check_device_link_rate_limit
 from app.schemas.auth import (
     DeviceLinkRequest,
     DeviceLinkResponse,
@@ -35,7 +35,11 @@ async def token():
     return {"message": "Token endpoint - to be implemented"}
 
 
-@router.post("/device/link", response_model=DeviceLinkResponse)
+@router.post(
+    "/device/link",
+    response_model=DeviceLinkResponse,
+    dependencies=[Depends(check_device_link_rate_limit)]
+)
 async def device_link(
     request: Request,
     link_request: DeviceLinkRequest,
@@ -165,15 +169,24 @@ def _extract_source_ip(request: Request) -> str:
     Note:
         When deployed behind AWS ALB, X-Forwarded-For header contains
         the original client IP as the first entry in a comma-separated list.
+
+        SECURITY: This implementation trusts X-Forwarded-For headers. This is
+        ONLY safe when deployed behind a trusted reverse proxy (AWS ALB) that
+        properly sanitizes these headers. Set UNIFLOW_TRUSTED_PROXY_HEADERS=false
+        if not behind a trusted proxy.
+
         Falls back to request.client.host in development environments.
     """
+    from app.config import settings
+
     x_forwarded_for = request.headers.get("X-Forwarded-For")
 
-    if x_forwarded_for:
+    if x_forwarded_for and settings.trusted_proxy_headers:
         # Take first IP from comma-separated list (original client)
+        # Only when behind trusted proxy (ALB)
         return x_forwarded_for.split(",")[0].strip()
 
-    # Fallback to direct client IP (dev environment)
+    # Fallback to direct client IP (dev environment or when proxy headers disabled)
     if request.client:
         return request.client.host
 

@@ -62,7 +62,7 @@ class DeviceRepository:
         last_seen: datetime | None = None,
         metadata: dict | None = None
     ) -> Device | None:
-        """Update device status and last_seen_at timestamp.
+        """Update device status and last_seen_at timestamp with optimistic locking.
 
         Args:
             db: Database session
@@ -73,6 +73,10 @@ class DeviceRepository:
 
         Returns:
             Updated Device instance or None if not found
+
+        Note:
+            Uses optimistic locking to prevent updating with stale timestamps.
+            Only updates if the new last_seen is >= current last_seen_at.
         """
         # Use current time if not provided
         if last_seen is None:
@@ -88,10 +92,12 @@ class DeviceRepository:
         if metadata is not None:
             update_values["device_metadata"] = metadata
 
-        # Execute update
+        # Execute update with optimistic locking
+        # Only update if new timestamp is >= current timestamp
         await db.execute(
             update(Device)
             .where(Device.agent_id == agent_id)
+            .where(Device.last_seen_at <= last_seen)
             .values(**update_values)
         )
         await db.flush()

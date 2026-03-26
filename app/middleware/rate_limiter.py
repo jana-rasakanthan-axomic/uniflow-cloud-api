@@ -77,10 +77,30 @@ class RateLimiter:
             # Allow request and record timestamp
             request_times.append(now)
 
-            # Cleanup: remove key if deque is empty after window
-            # This helps prevent memory leaks from abandoned keys
-            if len(request_times) == 0:
-                del self._requests[key]
-                del self._locks[key]
-
             return True, 0
+
+    async def cleanup_expired_keys(self) -> int:
+        """Remove keys with no recent requests (cleanup task).
+
+        Returns:
+            Number of keys cleaned up
+        """
+        now = time.time()
+        cutoff = now - (self.window_seconds * 2)  # Double window for safety
+        cleaned = 0
+
+        # Get list of keys to avoid modifying dict during iteration
+        keys_to_check = list(self._requests.keys())
+
+        for key in keys_to_check:
+            if key in self._locks:
+                async with self._locks[key]:
+                    if key in self._requests:
+                        request_times = self._requests[key]
+                        # If all timestamps are expired, remove the key
+                        if not request_times or (request_times and request_times[-1] < cutoff):
+                            del self._requests[key]
+                            del self._locks[key]
+                            cleaned += 1
+
+        return cleaned

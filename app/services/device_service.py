@@ -1,6 +1,7 @@
 """Device service for device linking and management."""
 
 import hashlib
+import hmac
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -89,22 +90,23 @@ class DeviceService:
                 os=machine_info["os"]
             )
 
-            # Step 3: Create initial refresh token record
+            # Step 3: Generate JWT token pair first
             chain_id = uuid4()
-            await self._create_refresh_token(
-                db=db,
-                device=device,
-                chain_id=chain_id
-            )
-
-            # Step 4: Generate JWT token pair
             token_pair = self._generate_tokens(
                 agent_id=device.agent_id,
                 org_id=device.org_id,
                 chain_id=chain_id
             )
 
-            # Step 5: Log successful device link
+            # Step 4: Create refresh token record with hash of actual JWT
+            await self._create_refresh_token(
+                db=db,
+                device=device,
+                chain_id=chain_id,
+                refresh_token=token_pair.refresh_token
+            )
+
+            # Step 5: Log successful device link (before final commit)
             await self._log_success(
                 db=db,
                 org_id=device.org_id,
@@ -113,13 +115,16 @@ class DeviceService:
                 machine_info=machine_info
             )
 
-            # Commit transaction
+            # Commit transaction (all operations succeeded)
             await db.commit()
 
             return token_pair
 
         except (InvalidSetupCodeError, SetupCodeExpiredError, SetupCodeAlreadyUsedError):
-            # Log failure and re-raise
+            # Rollback device/token creation
+            await db.rollback()
+
+            # Log failure in separate transaction
             await self._log_failure(
                 db=db,
                 setup_code=setup_code,
@@ -233,7 +238,8 @@ class DeviceService:
         self,
         db: AsyncSession,
         device: Device,
-        chain_id: UUID
+        chain_id: UUID,
+        refresh_token: str
     ) -> RefreshToken:
         """Create initial refresh token record.
 
@@ -241,15 +247,15 @@ class DeviceService:
             db: Database session
             device: Device instance
             chain_id: Token chain UUID
+            refresh_token: The actual JWT refresh token to hash
 
         Returns:
             RefreshToken instance
         """
-        # Generate a random token for hashing
-        raw_token = str(uuid4())
-        token_hash = self._hash_token(raw_token)
+        # Hash the actual JWT token with HMAC
+        token_hash = self._hash_token(refresh_token)
 
-        refresh_token = RefreshToken(
+        refresh_token_record = RefreshToken(
             id=uuid4(),
             user_id=device.user_id,
             device_id=device.id,
@@ -261,8 +267,8 @@ class DeviceService:
             created_at=datetime.now(UTC)
         )
 
-        db.add(refresh_token)
-        return refresh_token
+        db.add(refresh_token_record)
+        return refresh_token_record
 
     def _generate_tokens(
         self,
@@ -343,9 +349,19 @@ class DeviceService:
             machine_info: Machine information
             failure_reason: Reason for failure
         """
+        # Try to get org_id from setup code (if it exists)
+        org_id = None
+        try:
+            code = await self._find_setup_code(db, setup_code)
+            if code is not None:
+                org_id = code.org_id
+        except Exception:
+            # Ignore errors when looking up setup code for audit log
+            pass
+
         await self.audit_service.log_event(
             db=db,
-            org_id=None,  # Unknown until code is validated
+            org_id=org_id,  # May be None if code doesn't exist
             event_type="LINK_CODE_FAILED",
             actor_id=None,
             source_ip=machine_info["source_ip"],
@@ -365,15 +381,23 @@ class DeviceService:
         return uuid4()
 
     def _hash_token(self, token: str) -> str:
-        """Hash a token using SHA-256.
+        """Hash a token using HMAC-SHA256.
 
         Args:
             token: Token string to hash
 
         Returns:
-            Hex-encoded hash
+            Hex-encoded HMAC hash
+
+        Note:
+            Uses jwt_secret as the HMAC key for additional security.
+            This prevents attackers from pre-computing rainbow tables.
         """
-        return hashlib.sha256(token.encode()).hexdigest()
+        return hmac.new(
+            settings.jwt_secret.encode(),
+            token.encode(),
+            hashlib.sha256
+        ).hexdigest()
 
     def _redact_setup_code(self, code: str) -> str:
         """Partially redact setup code for audit logs.
@@ -460,22 +484,7 @@ class DeviceService:
         # Step 4: Revoke old token atomically
         await self.token_repository.revoke(db, old_token.id)
 
-        # Step 5: Create new refresh token with incremented sequence
-        new_refresh_token_record = RefreshToken(
-            id=uuid4(),
-            user_id=old_token.user_id,
-            device_id=old_token.device_id,
-            token_hash=self._hash_token(str(uuid4())),  # Placeholder, will be replaced
-            chain_id=old_token.chain_id,
-            sequence_num=old_token.sequence_num + 1,
-            revoked_at=None,
-            expires_at=datetime.now(UTC) + timedelta(days=settings.refresh_token_expire_days),
-            created_at=datetime.now(UTC)
-        )
-
-        await self.token_repository.create(db, new_refresh_token_record)
-
-        # Step 6: Generate new JWT tokens
+        # Step 5: Generate new JWT tokens first
         agent_id = UUID(claims["sub"])
         org_id = UUID(claims["org_id"])
 
@@ -491,10 +500,30 @@ class DeviceService:
             sequence_num=old_token.sequence_num + 1
         )
 
-        # Step 7: Update hash in database to match actual JWT
-        new_refresh_token_record.token_hash = self._hash_token(new_refresh_token)
+        # Step 6: Hash the actual refresh token with HMAC
+        token_hash = self._hash_token(new_refresh_token)
 
-        await db.commit()
+        # Step 7: Create refresh token record with actual hash
+        new_refresh_token_record = RefreshToken(
+            id=uuid4(),
+            user_id=old_token.user_id,
+            device_id=old_token.device_id,
+            token_hash=token_hash,
+            chain_id=old_token.chain_id,
+            sequence_num=old_token.sequence_num + 1,
+            revoked_at=None,
+            expires_at=datetime.now(UTC) + timedelta(days=settings.refresh_token_expire_days),
+            created_at=datetime.now(UTC)
+        )
+
+        await self.token_repository.create(db, new_refresh_token_record)
+
+        # Commit all changes (revoke old token + create new token)
+        try:
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
 
         return TokenPair(
             agent_id=agent_id,

@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, DateTime
+from sqlalchemy import CheckConstraint, DateTime, Index
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -29,4 +29,6 @@ class Command(Base, UUIDPrimaryKeyMixin, TimestampMixin):
             "status IN ('PENDING', 'DELIVERED', 'EXPIRED')",
             name="command_status_check",
         ),
+        # Index for pop_pending query: ORDER BY created_at with status + agent_id filter
+        Index("ix_commands_agent_status_created", "agent_id", "status", "created_at"),
     )
