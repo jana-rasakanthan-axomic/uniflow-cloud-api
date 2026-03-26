@@ -26,6 +26,13 @@ edge_limiter = RateLimiter(
     key_func=get_agent_key,
 )
 
+# Stricter rate limiter for device link endpoint (setup code attempts)
+device_link_limiter = RateLimiter(
+    requests=5,  # 5 attempts
+    window_seconds=300,  # per 5 minutes
+    key_func=get_ip_key,
+)
+
 
 async def check_auth_rate_limit(request: Request, response: Response):
     """
@@ -80,5 +87,24 @@ async def check_edge_rate_limit(request: Request, response: Response):
         raise HTTPException(
             status_code=429,
             detail="Rate limit exceeded. Please try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+
+async def check_device_link_rate_limit(request: Request, response: Response):
+    """
+    Dependency to check device link endpoint rate limit (stricter).
+
+    Raises:
+        HTTPException: 429 if rate limit exceeded
+    """
+    key = get_ip_key(request)
+    allowed, retry_after = await device_link_limiter.check_limit(key)
+
+    if not allowed:
+        response.headers["Retry-After"] = str(retry_after)
+        raise HTTPException(
+            status_code=429,
+            detail="Too many device link attempts. Please try again later.",
             headers={"Retry-After": str(retry_after)},
         )

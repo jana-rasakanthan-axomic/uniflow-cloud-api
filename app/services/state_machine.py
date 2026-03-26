@@ -16,9 +16,9 @@ class JobStateMachine:
     """
 
     # Terminal states - once reached, no further transitions allowed
+    # Note: TIMEOUT is semi-terminal (allows resend transition)
     TERMINAL_STATES: set[str] = {
         JobStatus.DENIED,
-        JobStatus.TIMEOUT,
         JobStatus.COMPLETED,
         JobStatus.PARTIALLY_FAILED,
         JobStatus.FAILED,
@@ -47,6 +47,9 @@ class JobStateMachine:
         JobStatus.PAUSED_USER: {
             "resume": JobStatus.IN_PROGRESS,
             "cancel": JobStatus.CANCELLED,
+        },
+        JobStatus.TIMEOUT: {
+            "resend": JobStatus.WAITING_FOR_AGENT,
         },
     }
 
