@@ -61,12 +61,31 @@ class TestUploadSTS:
 
     @patch("app.api.routers.edge.STSService")
     @patch("app.api.routers.edge.FileRepository")
+    @patch("app.api.routers.edge.JobRepository")
     def test_issue_sts_credentials_success(
-        self, mock_repo_cls, mock_sts_cls, client, job_id, file_ids
+        self, mock_job_repo_cls, mock_file_repo_cls, mock_sts_cls, client, job_id, file_ids
     ):
         """Test successful STS credential issuance."""
-        mock_repo = mock_repo_cls.return_value
-        mock_repo.verify_agent_ownership = AsyncMock(return_value=True)
+        # Mock job repository
+        mock_job_repo = mock_job_repo_cls.return_value
+        mock_job = MagicMock()
+        mock_job.id = job_id
+        mock_job.org_id = uuid4()
+        mock_job_repo.find_by_id = AsyncMock(return_value=mock_job)
+
+        # Mock file repository
+        mock_file_repo = mock_file_repo_cls.return_value
+        mock_file_repo.verify_agent_ownership = AsyncMock(return_value=True)
+
+        # Mock job files
+        mock_job_files = []
+        for file_id in file_ids:
+            mock_file = MagicMock()
+            mock_file.id = file_id
+            mock_file.oa_asset_id = f"oa_{file_id.hex[:8]}"
+            mock_file.status = "PRE_REGISTERED"
+            mock_job_files.append(mock_file)
+        mock_file_repo.find_by_job_id = AsyncMock(return_value=mock_job_files)
 
         expiry = datetime.now(UTC) + timedelta(hours=12)
         mock_sts = mock_sts_cls.return_value

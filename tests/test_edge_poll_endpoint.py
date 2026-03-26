@@ -57,10 +57,13 @@ async def test_poll_endpoint_returns_none_on_timeout(
     # Mock signaling service to return None (timeout)
     mock_signaling_service.hold_poll.return_value = None
 
-    # Call endpoint directly
-    from unittest.mock import patch
-    with patch('app.api.routers.edge.SignalingService', return_value=mock_signaling_service):
-        result = await poll(agent_id=agent_id, authenticated_agent_id=agent_id, db=mock_db)
+    # Call endpoint directly with injected dependency
+    result = await poll(
+        agent_id=agent_id,
+        authenticated_agent_id=agent_id,
+        db=mock_db,
+        signaling_service=mock_signaling_service
+    )
 
     assert result["action"] == "none"
 
@@ -76,16 +79,20 @@ async def test_poll_endpoint_returns_command_when_available(
 
     # Create mock command
     mock_command = MagicMock(spec=Command)
+    mock_command.id = uuid4()
     mock_command.type = "SCAN"
     mock_command.payload_json = {"path": "/test/path"}
 
     # Mock signaling service to return command
     mock_signaling_service.hold_poll.return_value = mock_command
 
-    # Call endpoint
-    from unittest.mock import patch
-    with patch('app.api.routers.edge.SignalingService', return_value=mock_signaling_service):
-        result = await poll(agent_id=agent_id, authenticated_agent_id=agent_id, db=mock_db)
+    # Call endpoint with injected dependency
+    result = await poll(
+        agent_id=agent_id,
+        authenticated_agent_id=agent_id,
+        db=mock_db,
+        signaling_service=mock_signaling_service
+    )
 
     assert result["action"] == "SCAN"
     assert result["payload"] == {"path": "/test/path"}
@@ -95,6 +102,7 @@ async def test_poll_endpoint_returns_command_when_available(
 async def test_poll_endpoint_validates_agent_id_matches_jwt(
     mock_db,
     agent_id: UUID,
+    mock_signaling_service
 ):
     """Test poll validates that query param agent_id matches JWT claim."""
     from app.api.routers.edge import poll
@@ -103,7 +111,12 @@ async def test_poll_endpoint_validates_agent_id_matches_jwt(
 
     # Call with mismatched agent IDs
     with pytest.raises(HTTPException) as exc_info:
-        await poll(agent_id=agent_id, authenticated_agent_id=different_agent_id, db=mock_db)
+        await poll(
+            agent_id=agent_id,
+            authenticated_agent_id=different_agent_id,
+            db=mock_db,
+            signaling_service=mock_signaling_service
+        )
 
     assert exc_info.value.status_code == 403
 
@@ -119,12 +132,16 @@ async def test_poll_endpoint_calls_hold_poll_with_correct_params(
 
     mock_signaling_service.hold_poll.return_value = None
 
-    # Call endpoint
+    # Call endpoint with injected dependency
     from unittest.mock import patch
-    with patch('app.api.routers.edge.SignalingService', return_value=mock_signaling_service):
-        with patch('app.api.routers.edge.settings') as mock_settings:
-            mock_settings.poll_timeout_seconds = 42
-            await poll(agent_id=agent_id, authenticated_agent_id=agent_id, db=mock_db)
+    with patch('app.api.routers.edge.settings') as mock_settings:
+        mock_settings.poll_timeout_seconds = 42
+        await poll(
+            agent_id=agent_id,
+            authenticated_agent_id=agent_id,
+            db=mock_db,
+            signaling_service=mock_signaling_service
+        )
 
     # Verify hold_poll was called with correct args
     mock_signaling_service.hold_poll.assert_called_once_with(

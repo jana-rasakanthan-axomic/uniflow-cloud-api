@@ -16,8 +16,17 @@ from app.services.device_service import TokenPair
 @pytest.fixture
 def app():
     """Create FastAPI app for testing."""
+    from app.middleware.rate_limit_dependency import check_device_link_rate_limit
+
     test_app = FastAPI()
     test_app.include_router(auth_router, prefix="/auth")
+
+    # Override rate limit dependency for tests
+    async def no_rate_limit():
+        pass
+
+    test_app.dependency_overrides[check_device_link_rate_limit] = no_rate_limit
+
     return test_app
 
 

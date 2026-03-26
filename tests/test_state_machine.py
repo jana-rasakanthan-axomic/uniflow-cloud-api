@@ -194,10 +194,9 @@ class TestIsTerminal:
     """Test is_terminal returns True for terminal states, False for non-terminal."""
 
     def test_terminal_states_return_true(self):
-        """All 6 terminal states return True."""
+        """All 5 terminal states return True."""
         terminal_states = [
             JobStatus.DENIED,
-            JobStatus.TIMEOUT,
             JobStatus.COMPLETED,
             JobStatus.PARTIALLY_FAILED,
             JobStatus.FAILED,
@@ -207,12 +206,13 @@ class TestIsTerminal:
             assert JobStateMachine.is_terminal(state)
 
     def test_non_terminal_states_return_false(self):
-        """Non-terminal states return False."""
+        """Non-terminal states return False (TIMEOUT is semi-terminal, allows resend)."""
         non_terminal_states = [
             JobStatus.PRE_REGISTERING,
             JobStatus.WAITING_FOR_AGENT,
             JobStatus.IN_PROGRESS,
             JobStatus.PAUSED_USER,
+            JobStatus.TIMEOUT,  # Semi-terminal: allows resend transition
         ]
         for state in non_terminal_states:
             assert not JobStateMachine.is_terminal(state)

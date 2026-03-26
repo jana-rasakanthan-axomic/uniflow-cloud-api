@@ -4,7 +4,13 @@ Patches PostgreSQL-specific column types (JSONB, INET) to be SQLite-compatible
 so models can be tested against in-memory SQLite databases.
 """
 
+import os
+
 from sqlalchemy.dialects.sqlite.base import SQLiteTypeCompiler
+
+# Set test environment
+os.environ["UNIFLOW_ENV"] = "test"
+os.environ["UNIFLOW_ENFORCE_TLS"] = "false"
 
 # Teach SQLite how to compile JSONB -> JSON and INET -> TEXT
 SQLiteTypeCompiler.visit_JSONB = lambda self, type_, **kw: self.visit_JSON(type_, **kw)
